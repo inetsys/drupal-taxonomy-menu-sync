@@ -1,0 +1,37 @@
+<?php
+
+function taxonomy_menu_sync_schema(){
+	return array(
+		'taxonomy_menu_sync_relations' => array(
+			'fields' => array(
+				'mlid' => array(
+					'type' => 'int',
+					'not null' => true
+				),
+				'tid' => array(
+					'type' => 'int',
+					'not null' => true
+				),
+			),
+			'primary key' => array('mlid', 'tid'),
+		),
+	);
+}
+
+function taxonomy_menu_sync_install(){
+	// Set weight to come after content_menu module
+	$weight = db_select('system', 's')
+		->fields('s', array('weight'))
+		->condition('name', 'content_menu')
+		->execute()
+		->fetchField();
+	db_update('system')
+		->fields(array(
+			'weight' => $weight + 1
+		))
+		->condition('name', 'taxonomy_menu_sync')
+		->execute();
+
+	// Disable default value in 'add new item' selection
+	variable_set('content_menu_default_add_operation', '');
+}

@@ -1,0 +1,187 @@
+<?php
+
+/** Implementation of hook_permission */
+function taxonomy_menu_sync_permission(){
+	return array(
+		'administer taxonomy menu sync' => array(
+			'title' => t('Administer taxonomy menu sync')
+		)
+	);
+}
+
+/** Implementation of hook_help */
+function taxonomy_menu_sync_help($path, $arguments){
+	switch($path){
+		case 'admin/structure/menu/manage/%':
+			return '<p>'.t('It is not allowed to delete menu items which have children. Please remove children links prior to deleting the parent item.').'</p>';
+	}
+}
+
+/** Implementation of hook_menu */
+function taxonomy_menu_sync_menu(){
+	return array(
+		'admin/structure/taxonomy/sync-menu' => array(
+			'title' => 'Sync menu',
+			'access arguments' => array('administer taxonomy menu sync'),
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array('taxonomy_menu_sync_menu_vocabularies_form'),
+			'file' => 'taxonomy_menu_sync.admin.inc'
+		),
+		'sync_tax' => array(
+			'title' => 'Section',
+			'access arguments' => array('access content'),
+			'page callback' => '_taxonomy_menu_sync_dummy_menu',
+			'page arguments' => array(),
+		)
+	);
+}
+/** Callback function for /sync_tax */
+function _taxonomy_menu_sync_dummy_menu(){
+	return '';
+}
+
+/** Implementation of hook_menu_alter */
+function taxonomy_menu_sync_menu_alter(&$items){
+	$items['admin/structure/menu/item/%menu_link/delete']['access callback'] = '_taxonomy_menu_sync_access_callback_menu_link_delete';
+	$items['admin/structure/menu/item/%menu_link/delete']['access arguments'][] = 4;
+}
+
+/** Access callback to admin/structure/menu/item/%menu_link/delete */
+function _taxonomy_menu_sync_access_callback_menu_link_delete($perm, $link){
+	// Do NOT allow to delete links with children
+	return user_access($perm) && !$link['has_children'];
+}
+
+/** Implementation of hook_menu_link_insert */
+function taxonomy_menu_sync_menu_link_insert($item){
+	module_load_include('inc', 'taxonomy_menu_sync');
+
+	$menu_name = $item['menu_name'];
+	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
+		$label = $item['link_title'];
+		$parent_term = taxonomy_term_sync_get_taxonomy_term($item['plid']);
+		$weight = $item['weight'];
+
+		// Search for existing term
+		$existing = taxonomy_menu_sync_search_existing_term($vocabulary->vid, $label, $parent_term ? $parent_term->tid : 0);
+
+		if(!$existing){
+			// Save new term
+			$term = new stdClass();
+			$term->vid = $vocabulary->vid;
+			$term->vocabulary_machine_name = $vocabulary->machine_name;
+			$term->name = $label;
+			$term->parent = $parent_term ? $parent_term->tid : 0;
+			$term->weight = $weight;
+
+			taxonomy_term_save($term);
+			$existing = $term;
+		}
+
+		// Add new relation
+		taxonomy_menu_sync_add_relation($existing->tid, $item['mlid']);
+
+		// Update link path to the referenced term
+		if(isset($item['target_content']) && $item['target_content'] == 'tax_sync'){
+			taxonomy_menu_sync_update_menu_link($existing->tid, $item['mlid']);
+		}
+	}
+}
+
+/** Implementation of hook_menu_link_update */
+function taxonomy_menu_sync_menu_link_update($item){
+	module_load_include('inc', 'taxonomy_menu_sync');
+
+	$menu_name = $item['menu_name'];
+	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
+		$term = taxonomy_term_sync_get_taxonomy_term($item['mlid']);
+		$menu_parent_term = taxonomy_term_sync_get_taxonomy_term($item['plid']);
+		$parent_tid = $menu_parent_term ? $menu_parent_term->tid : 0;
+
+		taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_tid);
+	}
+}
+
+/** Implementation of hook_menu_link_delete */
+function taxonomy_menu_sync_menu_link_delete($item){
+	module_load_include('inc', 'taxonomy_menu_sync');
+
+	$term = taxonomy_term_sync_get_taxonomy_term($item['mlid']);
+	$menu_name = $item['menu_name'];
+	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
+		$relations = taxonomy_menu_get_term_relations($term->tid);
+		if(count($relations) == 1 && in_array($item['mlid'], $relations)){
+			taxonomy_term_delete($term->tid);
+		}else{
+			taxonomy_menu_sync_delete_relation($term->tid, $item['mlid']);
+		}
+	}
+}
+
+/** Implementation of hook_menu_item_element_alter */
+function taxonomy_menu_sync_menu_item_element_alter(&$element){
+	// drupal_Set_message('<pre>'.print_r($element['operations'], true).'</pre>');
+	$item = $element['#item'];
+
+	// If item has children, do not allow to delete it
+	if($item['has_children'] && isset($element['operations']['delete'])){
+		unset($element['operations']['delete']);
+	}
+
+	if($item['router_path'] == 'taxonomy/term/%'){
+		// Set title 'Section' if it references a taxonomy term
+		$element['target_content']['#markup'] = t('Section');
+
+		// Remove operation "Select existing content"
+		if(isset($element['operations']['selectcontent'])){
+			unset($element['operations']['selectcontent']);
+		}
+	}
+}
+
+/** Implementation of hook_menu_item_target_types_alter */
+function taxonomy_menu_sync_menu_item_target_types_alter(&$target_types, $context){
+	module_load_include('inc', 'taxonomy_menu_sync');
+
+	$menu_name = $context['menu_name'];
+	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
+		// Remove default dummy action
+		if(isset($target_types['dummy'])){
+			unset($target_types['dummy']);
+		}
+
+		// Add tax_sync at the beggining of the list
+		$target_types = array_reverse($target_types, true);
+		$target_types['tax_sync'] = array(
+			'label' => t('New section'),
+			'handler' => '_taxonomy_menu_sync_target_type_tax_sync_handler',
+			'clean_menu_save_message' => false
+		);
+		$target_types = array_reverse($target_types, true);
+	}
+}
+/** Handler for target tax_sync */
+function _taxonomy_menu_sync_target_type_tax_sync_handler($form, $form_state, $item){
+  drupal_set_message(t('A new menu item has been created.'));
+  $item['link_path'] = 'sync_tax';
+  content_menu_link_save($item);
+}
+
+/** Implementation of hook_taxonomy_term_delete */
+function taxonomy_menu_sync_taxonomy_term_delete($term){
+	module_load_include('inc', 'taxonomy_menu_sync');
+
+	taxonomy_menu_sync_delete_all_relations($term->tid);
+}
+
+/** Implementation of hook_form_FORM_ID_alter */
+function taxonomy_menu_sync_form_menu_edit_item_alter(&$form, &$form_state){
+	$form['link_path']['#disabled'] = true;
+	$form['advanced']['expanded']['#access'] = false;
+	$form['advanced']['parent']['#access'] = false;
+	$form['advanced']['weight']['#access'] = false;
+
+	if($form['original_item']['#value']['has_children']){
+		$form['actions']['delete']['#access'] = false;
+	}
+}
