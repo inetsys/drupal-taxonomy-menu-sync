@@ -1,8 +1,9 @@
 <?php
 
 function taxonomy_menu_sync_menu_vocabularies_form($form, &$form_state){
-	$defaults = variable_get('taxonomy_menu_sync_list', array());
+	// Synchronized menus
 
+	$defaults = variable_get('taxonomy_menu_sync_list', array());
 	$menus = menu_get_menus();
 	$vocabularies = taxonomy_get_vocabularies();
 	$options = array(0 => '-');
@@ -13,7 +14,11 @@ function taxonomy_menu_sync_menu_vocabularies_form($form, &$form_state){
 	}
 
 	$form['taxonomy_menu_sync_list'] = array(
-		'#tree' => true
+		'#title' => t('Synchronized menus'),
+		'#type' => 'fieldset',
+		'#collapsible' => false,
+		'#collapsed' => false,
+		'#tree' => true,
 	);
 
 	foreach($menus as $key => $label){
@@ -24,6 +29,25 @@ function taxonomy_menu_sync_menu_vocabularies_form($form, &$form_state){
 			'#default_value' => isset($defaults[$key]) ? $defaults[$key] : '',
 		);
 	}
+
+	// Delete default *Placeholder* action
+
+	$form['taxonomy_menu_sync_default_actions'] = array(
+		'#type' => 'checkboxes',
+		'#title' => t('Default item actions'),
+		'#options' => array(
+			'dummy' => t('Placeholder'),
+			'tax_sync' => t('Add section'),
+			'url' => t('URL'),
+			'existing' => t('Existing content')
+		),
+		'#default_value' => variable_get('taxonomy_menu_sync_default_actions', array(
+			'dummy' => false,
+			'tax_sync' => 'tax_sync',
+			'url' => 'url',
+			'existing' => 'existing',
+		))
+	);
 
 	return system_settings_form($form);
 }

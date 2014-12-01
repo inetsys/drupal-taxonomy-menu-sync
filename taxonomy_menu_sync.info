@@ -4,4 +4,5 @@ version = 7.x-1.0
 core = 7.x
 package = Administration
 dependencies[] = content_menu
+dependencies[] = taxonomy
 configure = admin/structure/taxonomy/sync-menu

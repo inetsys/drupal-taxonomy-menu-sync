@@ -19,21 +19,26 @@ function taxonomy_menu_sync_help($path, $arguments){
 
 /** Implementation of hook_menu */
 function taxonomy_menu_sync_menu(){
-	return array(
-		'admin/structure/taxonomy/sync-menu' => array(
-			'title' => 'Sync menu',
-			'access arguments' => array('administer taxonomy menu sync'),
-			'page callback' => 'drupal_get_form',
-			'page arguments' => array('taxonomy_menu_sync_menu_vocabularies_form'),
-			'file' => 'taxonomy_menu_sync.admin.inc'
-		),
-		'sync_tax' => array(
+	$items = array();
+
+	$items['admin/structure/taxonomy/sync-menu'] = array(
+		'title' => 'Sync menu',
+		'access arguments' => array('administer taxonomy menu sync'),
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('taxonomy_menu_sync_menu_vocabularies_form'),
+		'file' => 'taxonomy_menu_sync.admin.inc'
+	);
+
+	if(variable_get('taxonomy_menu_sync_add_default_action', true)){
+		$items['sync_tax'] = array(
 			'title' => 'Section',
 			'access arguments' => array('access content'),
 			'page callback' => '_taxonomy_menu_sync_dummy_menu',
 			'page arguments' => array(),
-		)
-	);
+		);
+	}
+
+	return $items;
 }
 /** Callback function for /sync_tax */
 function _taxonomy_menu_sync_dummy_menu(){
@@ -142,22 +147,32 @@ function taxonomy_menu_sync_menu_item_element_alter(&$element){
 /** Implementation of hook_menu_item_target_types_alter */
 function taxonomy_menu_sync_menu_item_target_types_alter(&$target_types, $context){
 	module_load_include('inc', 'taxonomy_menu_sync');
-
 	$menu_name = $context['menu_name'];
 	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
-		// Remove default dummy action
-		if(isset($target_types['dummy'])){
-			unset($target_types['dummy']);
+		$default_actions = variable_get('taxonomy_menu_sync_default_actions', array(
+			'dummy' => false,
+			'tax_sync' => 'tax_sync',
+			'url' => 'url',
+			'existing' => 'existing',
+		));
+
+		if(isset($default_actions['tax_sync']) && $default_actions['tax_sync']){
+			// Add tax_sync at the beggining of the list
+			$target_types = array_reverse($target_types, true);
+			$target_types['tax_sync'] = array(
+				'label' => t('New section'),
+				'handler' => '_taxonomy_menu_sync_target_type_tax_sync_handler',
+				'clean_menu_save_message' => false
+			);
+			$target_types = array_reverse($target_types, true);
 		}
 
-		// Add tax_sync at the beggining of the list
-		$target_types = array_reverse($target_types, true);
-		$target_types['tax_sync'] = array(
-			'label' => t('New section'),
-			'handler' => '_taxonomy_menu_sync_target_type_tax_sync_handler',
-			'clean_menu_save_message' => false
-		);
-		$target_types = array_reverse($target_types, true);
+		// Unset disabled default actions
+		foreach($default_actions as $key => $active){
+			if(isset($target_types[$key]) && !$active){
+				unset($target_types[$key]);
+			}
+		}
 	}
 }
 /** Handler for target tax_sync */
