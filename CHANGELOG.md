@@ -3,8 +3,11 @@
 ## Version 1.x-dev
 
 - Configure default actions  
-Clean default actions on menu items from content menu module
- 
+Clean default actions on menu items from content menu module.
+
+- Taxonomy bundles  
+Define subbundles inside a taxonomy vocabulary.  
+Create any subbundle term from menu management.
 
 ## Version 1.0 
 

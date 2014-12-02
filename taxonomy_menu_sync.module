@@ -5,6 +5,9 @@ function taxonomy_menu_sync_permission(){
 	return array(
 		'administer taxonomy menu sync' => array(
 			'title' => t('Administer taxonomy menu sync')
+		),
+		'create synchronized taxonomy terms' => array(
+			'title' => t('Create synchronized taxonomy terms')
 		)
 	);
 }
@@ -25,8 +28,63 @@ function taxonomy_menu_sync_menu(){
 		'title' => 'Sync menu',
 		'access arguments' => array('administer taxonomy menu sync'),
 		'page callback' => 'drupal_get_form',
-		'page arguments' => array('taxonomy_menu_sync_menu_vocabularies_form'),
+		'page arguments' => array('taxonomy_menu_sync_settings_form'),
 		'file' => 'taxonomy_menu_sync.admin.inc'
+	);
+
+	$items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/bundles'] = array(
+		'title' => 'Bundles',
+		'page callback' => 'taxonomy_menu_sync_vocabulary_bundles',
+		'page arguments' => array(3),
+		'access arguments' => array('administer taxonomy'),
+		'file' => 'taxonomy_menu_sync.admin.inc',
+	);
+	$items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/bundles/add'] = array(
+		'title' => 'Add bundle',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('taxonomy_menu_sync_vocabulary_add_bundle', 3),
+		'access arguments' => array('administer taxonomy'),
+		'type' => MENU_LOCAL_ACTION,
+		'weight' => 0,
+		'file' => 'taxonomy_menu_sync.admin.inc'
+	);
+	$items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/bundles/%taxonomy_bundle_machine_name'] = array(
+		'title' => 'Taxonomy bundle',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('taxonomy_menu_sync_vocabulary_edit_bundle', 3, 5),
+		'access arguments' => array('administer taxonomy'),
+		'file' => 'taxonomy_menu_sync.admin.inc',
+	);
+	$items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/bundles/%taxonomy_bundle_machine_name/edit'] = array(
+		'title' => 'Edit',
+		'type' => MENU_DEFAULT_LOCAL_TASK,
+	);
+	$items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/bundles/%taxonomy_bundle_machine_name/fields'] = array(
+		'title' => 'Manage fields',
+		'type' => MENU_LOCAL_TASK,
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('taxonomy_menu_sync_vocabulary_manage_bundle_fields', 3, 5),
+		'access arguments' => array('administer taxonomy'),
+		'file' => 'taxonomy_menu_sync.admin.inc',
+		'weight' => 0
+	);
+	$items['admin/structure/taxonomy/%taxonomy_vocabulary_machine_name/bundles/%taxonomy_bundle_machine_name/delete'] = array(
+		'title' => 'Delete',
+		'type' => MENU_LOCAL_TASK,
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('taxonomy_menu_sync_vocabulary_delete_bundle', 3, 5),
+		'access arguments' => array('administer taxonomy'),
+		'file' => 'taxonomy_menu_sync.admin.inc',
+		'weight' => 1
+	);
+
+	$items['admin/structure/menu/manage/%menu/add-item/%taxonomy_bundle_machine_name'] = array(
+		'title' => 'Add new section',
+		'type' => MENU_CALLBACK,
+		'access callback' => '_taxonomy_menu_sync_access_callback_menu_add_item',
+		'access arguments' => array('create synchronized taxonomy terms', 4, 6),
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('taxonomy_menu_sync_add_taxonomy_term_form', 4, 6),
 	);
 
 	if(variable_get('taxonomy_menu_sync_add_default_action', true)){
@@ -40,6 +98,10 @@ function taxonomy_menu_sync_menu(){
 
 	return $items;
 }
+function taxonomy_bundle_machine_name_load($name){
+	return str_replace('-', '_', $name);
+}
+
 /** Callback function for /sync_tax */
 function _taxonomy_menu_sync_dummy_menu(){
 	return '';
@@ -56,10 +118,36 @@ function _taxonomy_menu_sync_access_callback_menu_link_delete($perm, $link){
 	// Do NOT allow to delete links with children
 	return user_access($perm) && !$link['has_children'];
 }
+/** Access callback to admin/structure/menu/manage/%menu/add-item/%taxonomy_bundle_machine_name */
+function _taxonomy_menu_sync_access_callback_menu_add_item($perm, $menu, $bundle_machine_name){
+	if(!user_access($perm)){
+		return false;
+	}
+
+	// Do NOT allow to add synchronized items to non-synchronized menus
+	module_load_include('inc', 'taxonomy_menu_sync');
+	$vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu['menu_name']);
+	if(!$vocabulary){
+		return false;
+	}
+
+	$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
+	if(!isset($bundles[$bundle_machine_name])){
+		return false;
+	}
+
+	$menu_item = content_menu_get_menu_item_from_querystring();
+	if(empty($menu_item)){
+		return false;
+	}
+
+	return true;
+}
 
 /** Implementation of hook_menu_link_insert */
 function taxonomy_menu_sync_menu_link_insert($item){
 	module_load_include('inc', 'taxonomy_menu_sync');
+	// drupal_set_message('<pre>'.print_r($item, true).'</pre>');
 
 	$menu_name = $item['menu_name'];
 	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
@@ -72,7 +160,7 @@ function taxonomy_menu_sync_menu_link_insert($item){
 
 		if(!$existing){
 			// Save new term
-			$term = new stdClass();
+			$term = isset($item['term']) ? $item['term'] : new stdClass();
 			$term->vid = $vocabulary->vid;
 			$term->vocabulary_machine_name = $vocabulary->machine_name;
 			$term->name = $label;
@@ -80,6 +168,7 @@ function taxonomy_menu_sync_menu_link_insert($item){
 			$term->weight = $weight;
 
 			taxonomy_term_save($term);
+			//field_attach_insert('taxonomy_term', $term);
 			$existing = $term;
 		}
 
@@ -87,7 +176,7 @@ function taxonomy_menu_sync_menu_link_insert($item){
 		taxonomy_menu_sync_add_relation($existing->tid, $item['mlid']);
 
 		// Update link path to the referenced term
-		if(isset($item['target_content']) && $item['target_content'] == 'tax_sync'){
+		if(isset($item['term']) || (isset($item['target_content']) && $item['target_content'] == 'tax_sync')){
 			taxonomy_menu_sync_update_menu_link($existing->tid, $item['mlid']);
 		}
 	}
@@ -112,13 +201,15 @@ function taxonomy_menu_sync_menu_link_delete($item){
 	module_load_include('inc', 'taxonomy_menu_sync');
 
 	$term = taxonomy_term_sync_get_taxonomy_term($item['mlid']);
-	$menu_name = $item['menu_name'];
-	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
-		$relations = taxonomy_menu_get_term_relations($term->tid);
-		if(count($relations) == 1 && in_array($item['mlid'], $relations)){
-			taxonomy_term_delete($term->tid);
-		}else{
-			taxonomy_menu_sync_delete_relation($term->tid, $item['mlid']);
+	if($term){
+		$menu_name = $item['menu_name'];
+		if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
+			$relations = taxonomy_menu_get_term_relations($term->tid);
+			if(count($relations) == 1 && in_array($item['mlid'], $relations)){
+				taxonomy_term_delete($term->tid);
+			}else{
+				taxonomy_menu_sync_delete_relation($term->tid, $item['mlid']);
+			}
 		}
 	}
 }
@@ -173,6 +264,21 @@ function taxonomy_menu_sync_menu_item_target_types_alter(&$target_types, $contex
 				unset($target_types[$key]);
 			}
 		}
+
+		// Taxonomy bundles
+
+		$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
+		foreach($bundles as $key => $data){
+			$target_types['bundle_'.$key] = array(
+				'label' => $data['name'],
+				'handler' => '_taxonomy_menu_target_type_taxonomy_bundle_handler',
+				'clean_menu_save_message' => true,
+				'arguments' => array(
+					'vocabulary' => $vocabulary,
+					'bundle' => $data
+				)
+			);
+		}
 	}
 }
 /** Handler for target tax_sync */
@@ -181,7 +287,11 @@ function _taxonomy_menu_sync_target_type_tax_sync_handler($form, $form_state, $i
   $item['link_path'] = 'sync_tax';
   content_menu_link_save($item);
 }
-
+function _taxonomy_menu_target_type_taxonomy_bundle_handler($form, $form_state, $item, $vocabulary, $bundle){
+	drupal_set_message(t('You`re about to create a new generic menu item linking to a %bundle.', array('%bundle' => $bundle['name'])));
+	drupal_set_message(t('Complete the process by filling out and saving the form below.'));
+	drupal_goto('admin/structure/menu/manage/'.$item['name'].'/add-item/'.str_replace('_', '-', $bundle['machine_name']), array('query' => content_menu_assemble_query_string($item)));
+}
 /** Implementation of hook_taxonomy_term_delete */
 function taxonomy_menu_sync_taxonomy_term_delete($term){
 	module_load_include('inc', 'taxonomy_menu_sync');
@@ -199,4 +309,127 @@ function taxonomy_menu_sync_form_menu_edit_item_alter(&$form, &$form_state){
 	if($form['original_item']['#value']['has_children']){
 		$form['actions']['delete']['#access'] = false;
 	}
+}
+
+function taxonomy_menu_sync_add_taxonomy_term_form($form, &$form_state, $menu, $bundle_machine_name){
+	$vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu['menu_name']);
+	$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
+
+	$bundle = $bundles[$bundle_machine_name];
+	$bundle_settings = variable_get('taxonomy_menu_sync_'.$vocabulary->machine_name.'__'.$bundle['machine_name'].'_data', array());
+	$bundle_settings[$bundle['field']] = array(
+		'mode' => 0,
+		'default_value' => $bundle['value']
+	);
+
+	$menu_item = content_menu_get_menu_item_from_querystring();
+
+	$form = array();
+
+	$form['vocabulary'] = array(
+		'#type' => 'value',
+		'#value' => $vocabulary
+	);
+	$form['bundle'] = array(
+		'#type' => 'value',
+		'#value' => $bundle
+	);
+	$form['bundle_settings'] = array(
+		'#type' => 'value',
+		'#value' => $bundle_settings
+	);
+
+	// Item title
+	$form['name'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Title'),
+		'#value' => $menu_item['title'],
+		'#disabled' => true
+	);
+
+	// Field API
+	$term = new stdClass;
+	$term->vocabulary_machine_name = $vocabulary->machine_name;
+	$langcode = entity_language('taxonomy_term', $term);
+	$language = $langcode ? field_valid_language($langcode) : LANGUAGE_NONE;
+
+	// Default values
+	foreach($bundle_settings as $field_name => $data){
+		$field = field_info_field($field_name);
+		switch($field['type']){
+			case 'text':
+			default:
+				$key = 'value';
+				break;
+		}
+		$term->{$field_name} = array(
+			$language => array(
+				0 => array(
+					$key => $data['default_value']
+				)
+			)
+		);
+	}
+	field_attach_form('taxonomy_term', $term, $form, $form_state, $langcode);
+
+	// Alter fields with bundle_settings
+	foreach($bundle_settings as $field_name => $data){
+		if(!isset($form[$field_name])){
+			continue;
+		}
+
+		$field = field_info_field($field_name);
+		switch($field['type']){
+			case 'text':
+			default:
+				$key = 'value';
+				break;
+		}
+
+		switch($data['mode']){
+			// Disabled
+			case 0:
+				if(empty($data['default_value'])){
+					unset($form[$field_name]);
+				}else{
+					$form[$field_name]['#access'] = false;
+				}
+				break;
+
+			// Visible
+			case 1:
+				break;
+
+			// Required
+			case 2:
+				$form[$field_name][$language][0][$key]['#required'] = true;
+				break;
+		}
+	}
+
+	$form['actions'] = array(
+		'#type' => 'actions'
+	);
+	$form['actions']['submit'] = array(
+		'#type' => 'submit',
+		'#value' => t('Submit')
+	);
+
+	return $form;
+}
+function taxonomy_menu_sync_add_taxonomy_term_form_submit($form, &$form_state){
+	$values = $form_state['values'];
+
+	$term = new stdClass;
+	foreach($values as $field => $value){
+		if(strpos($field, 'field_') === 0){
+			$term->{$field} = $value;
+		}
+	}
+
+	$menu_item = content_menu_get_menu_item_from_querystring();
+	$menu_item['link_path'] = 'sync_tax';
+	$menu_item['term'] = $term;
+
+	content_menu_link_save($menu_item);
 }

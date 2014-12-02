@@ -365,7 +365,7 @@ function taxonomy_menu_sync_update_menu_link($tid, $mlid){
 		->condition('mlid', $mlid)
 		->execute()
 		->fetchField();
-
+var_dump($router_path);
 	if($router_path == 'taxonomy/term/%' || $router_path == 'sync_tax'){
 		db_update('menu_links')
 			->fields(array(
@@ -377,4 +377,18 @@ function taxonomy_menu_sync_update_menu_link($tid, $mlid){
 	}
 
 	return true;
+}
+
+/**
+ * @param object $vocabulary
+ * @param string $machine_name
+ * @return array|boolean
+ */
+function taxonomy_menu_sync_load_bundle($vocabulary, $machine_name){
+	$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
+
+	return isset($bundles[$machine_name]) ? $bundles[$machine_name] : false;
+}
+
+function _taxonomy_menu_sync_get_taxonomy_bundle_form(&$form, &$form_state, $vocabulary, $bundle){
 }
