@@ -98,13 +98,10 @@ function taxonomy_menu_sync_menu(){
 
 	return $items;
 }
+
+/** Load function for taxonomy_bundle_machine_name */
 function taxonomy_bundle_machine_name_load($name){
 	return str_replace('-', '_', $name);
-}
-
-/** Callback function for /sync_tax */
-function _taxonomy_menu_sync_dummy_menu(){
-	return '';
 }
 
 /** Implementation of hook_menu_alter */
@@ -142,6 +139,11 @@ function _taxonomy_menu_sync_access_callback_menu_add_item($perm, $menu, $bundle
 	}
 
 	return true;
+}
+
+/** Callback function for /sync_tax */
+function _taxonomy_menu_sync_dummy_menu(){
+	return '';
 }
 
 /** Implementation of hook_menu_link_insert */
@@ -192,7 +194,16 @@ function taxonomy_menu_sync_menu_link_update($item){
 		$menu_parent_term = taxonomy_term_sync_get_taxonomy_term($item['plid']);
 		$parent_tid = $menu_parent_term ? $menu_parent_term->tid : 0;
 
-		taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_tid);
+		$updated_term = taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_tid);
+
+		// Fields
+		if(isset($item['term'])){
+			foreach(get_object_vars($item['term']) as $field => $value){
+				$updated_term->{$field} = $value;
+			}
+
+			taxonomy_term_save($updated_term);
+		}
 	}
 }
 
@@ -216,7 +227,6 @@ function taxonomy_menu_sync_menu_link_delete($item){
 
 /** Implementation of hook_menu_item_element_alter */
 function taxonomy_menu_sync_menu_item_element_alter(&$element){
-	// drupal_Set_message('<pre>'.print_r($element['operations'], true).'</pre>');
 	$item = $element['#item'];
 
 	// If item has children, do not allow to delete it
@@ -224,6 +234,7 @@ function taxonomy_menu_sync_menu_item_element_alter(&$element){
 		unset($element['operations']['delete']);
 	}
 
+	// @todo Describe bundles
 	if($item['router_path'] == 'taxonomy/term/%'){
 		// Set title 'Section' if it references a taxonomy term
 		$element['target_content']['#markup'] = t('Section');
@@ -287,11 +298,13 @@ function _taxonomy_menu_sync_target_type_tax_sync_handler($form, $form_state, $i
   $item['link_path'] = 'sync_tax';
   content_menu_link_save($item);
 }
+/** Handler for target bundle */
 function _taxonomy_menu_target_type_taxonomy_bundle_handler($form, $form_state, $item, $vocabulary, $bundle){
 	drupal_set_message(t('You`re about to create a new generic menu item linking to a %bundle.', array('%bundle' => $bundle['name'])));
 	drupal_set_message(t('Complete the process by filling out and saving the form below.'));
 	drupal_goto('admin/structure/menu/manage/'.$item['name'].'/add-item/'.str_replace('_', '-', $bundle['machine_name']), array('query' => content_menu_assemble_query_string($item)));
 }
+
 /** Implementation of hook_taxonomy_term_delete */
 function taxonomy_menu_sync_taxonomy_term_delete($term){
 	module_load_include('inc', 'taxonomy_menu_sync');
@@ -299,28 +312,93 @@ function taxonomy_menu_sync_taxonomy_term_delete($term){
 	taxonomy_menu_sync_delete_all_relations($term->tid);
 }
 
-/** Implementation of hook_form_FORM_ID_alter */
+/** Implementation of hook_form_FORM_ID_alter
+ * Form ID: menu_edit_item
+ */
 function taxonomy_menu_sync_form_menu_edit_item_alter(&$form, &$form_state){
-	$form['link_path']['#disabled'] = true;
-	$form['advanced']['expanded']['#access'] = false;
-	$form['advanced']['parent']['#access'] = false;
-	$form['advanced']['weight']['#access'] = false;
+	module_load_include('inc', 'taxonomy_menu_sync');
 
-	if($form['original_item']['#value']['has_children']){
-		$form['actions']['delete']['#access'] = false;
+	$mlid = $form['mlid']['#value'];
+	$menu_link = menu_link_load($mlid);
+	$menu_name = $menu_link['menu_name'];
+
+	$vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name);
+	if($vocabulary){
+		// Clean default options
+		$form['link_path']['#disabled'] = true;
+		$form['advanced']['expanded']['#access'] = false;
+		$form['advanced']['parent']['#access'] = false;
+		$form['advanced']['weight']['#access'] = false;
+
+		// Do not allow to delete items with children
+		if($form['original_item']['#value']['has_children']){
+			$form['actions']['delete']['#access'] = false;
+		}
+
+		// Taxonomy term
+		$term = taxonomy_term_sync_get_taxonomy_term($mlid);
+		$bundle = taxonomy_menu_sync_get_term_bundle($term);
+		$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
+
+		$form['original_term'] = array(
+			'#type' => 'value',
+			'#value' => $term
+		);
+		$form['settings'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Settings'),
+			'#collapsible' => true,
+			'#collapsed' => false,
+		);
+
+		_taxonomy_menu_sync_alter_term_form($term, $bundle_settings, $form['settings'], $form_state);
+
+		foreach($form['#submit'] as $i => &$callable){
+			if($callable == 'menu_edit_item_submit'){
+				$callable = 'taxonomy_menu_sync_form_menu_edit_item_alter_submit';
+			}
+		}
 	}
+}
+function taxonomy_menu_sync_form_menu_edit_item_alter_submit($form, &$form_state){
+	$item = $form_state['values'];
+
+	// Term fields
+	$term = new stdClass;
+	$values = $form_state['values'];
+	foreach($values as $field => $value){
+		if(strpos($field, 'field_') === 0){
+			$term->{$field} = $value;
+		}
+	}
+	$item['term'] = $term;
+
+	// Item properties
+	$item['hidden'] = (int) !$item['enabled'];
+	unset($item['enabled']);
+	$item['options']['attributes']['title'] = $item['description'];
+	list($item['menu_name'], $item['plid']) = explode(':', $item['parent']);
+
+	// Build original item
+	$original_term = (object) array_intersect_key(get_object_vars($values['original_term']), get_object_vars($term));
+	$original_item = array_intersect_key($form_state['values']['original_item'], $item);
+	$original_item['term'] = $original_term;
+	$original_item['options'] = serialize($original_item['options']);
+
+	if(!menu_link_save($item, $original_item)){
+		drupal_set_message(t('There was an error saving the menu link.'), 'error');
+	}else{
+		drupal_set_message(t('Your configuration has been saved.'));
+	}
+	$form_state['redirect'] = 'admin/structure/menu/manage/'.$item['menu_name'];
+
 }
 
 function taxonomy_menu_sync_add_taxonomy_term_form($form, &$form_state, $menu, $bundle_machine_name){
 	$vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu['menu_name']);
 	$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
-
 	$bundle = $bundles[$bundle_machine_name];
-	$bundle_settings = variable_get('taxonomy_menu_sync_'.$vocabulary->machine_name.'__'.$bundle['machine_name'].'_data', array());
-	$bundle_settings[$bundle['field']] = array(
-		'mode' => 0,
-		'default_value' => $bundle['value']
-	);
+	$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
 
 	$menu_item = content_menu_get_menu_item_from_querystring();
 
@@ -350,62 +428,8 @@ function taxonomy_menu_sync_add_taxonomy_term_form($form, &$form_state, $menu, $
 	// Field API
 	$term = new stdClass;
 	$term->vocabulary_machine_name = $vocabulary->machine_name;
-	$langcode = entity_language('taxonomy_term', $term);
-	$language = $langcode ? field_valid_language($langcode) : LANGUAGE_NONE;
 
-	// Default values
-	foreach($bundle_settings as $field_name => $data){
-		$field = field_info_field($field_name);
-		switch($field['type']){
-			case 'text':
-			default:
-				$key = 'value';
-				break;
-		}
-		$term->{$field_name} = array(
-			$language => array(
-				0 => array(
-					$key => $data['default_value']
-				)
-			)
-		);
-	}
-	field_attach_form('taxonomy_term', $term, $form, $form_state, $langcode);
-
-	// Alter fields with bundle_settings
-	foreach($bundle_settings as $field_name => $data){
-		if(!isset($form[$field_name])){
-			continue;
-		}
-
-		$field = field_info_field($field_name);
-		switch($field['type']){
-			case 'text':
-			default:
-				$key = 'value';
-				break;
-		}
-
-		switch($data['mode']){
-			// Disabled
-			case 0:
-				if(empty($data['default_value'])){
-					unset($form[$field_name]);
-				}else{
-					$form[$field_name]['#access'] = false;
-				}
-				break;
-
-			// Visible
-			case 1:
-				break;
-
-			// Required
-			case 2:
-				$form[$field_name][$language][0][$key]['#required'] = true;
-				break;
-		}
-	}
+	_taxonomy_menu_sync_alter_term_form($term, $bundle_settings, $form, $form_state);
 
 	$form['actions'] = array(
 		'#type' => 'actions'

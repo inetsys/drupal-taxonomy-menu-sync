@@ -286,6 +286,7 @@ function taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_ti
 	$label = $item['link_title'];
 
 	$original = $term;
+	$return = $term;
 
 	$relations = taxonomy_menu_get_term_relations($term->tid);
 	$term_parent_term = taxonomy_menu_sync_get_parent_term($term->tid);
@@ -300,6 +301,8 @@ function taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_ti
 				$term->weight = $item['weight'];
 
 				taxonomy_term_save($term);
+
+				$return = $term;
 			}else{
 				// create a new term
 				$new_term = new stdClass();
@@ -324,6 +327,8 @@ function taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_ti
 					$child_term = taxonomy_term_sync_get_taxonomy_term($child['mlid']);
 					taxonomy_menu_update_menu_item_referenced_term($child, $child_term, $new_term->tid);
 				}
+
+				$return = $new_term;
 			}
 		}else{
 			// Delete old relation to this menu item
@@ -349,8 +354,12 @@ function taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_ti
 			if($original->tid != $existing->tid){
 				module_invoke_all('taxonomy_term_sync_modified', $existing, $original);
 			}
+
+			$return = $existing;
 		}
 	}
+
+	return $return;
 }
 
 /**
@@ -365,7 +374,7 @@ function taxonomy_menu_sync_update_menu_link($tid, $mlid){
 		->condition('mlid', $mlid)
 		->execute()
 		->fetchField();
-var_dump($router_path);
+
 	if($router_path == 'taxonomy/term/%' || $router_path == 'sync_tax'){
 		db_update('menu_links')
 			->fields(array(
@@ -390,5 +399,108 @@ function taxonomy_menu_sync_load_bundle($vocabulary, $machine_name){
 	return isset($bundles[$machine_name]) ? $bundles[$machine_name] : false;
 }
 
-function _taxonomy_menu_sync_get_taxonomy_bundle_form(&$form, &$form_state, $vocabulary, $bundle){
+/**
+ * @param object $term
+ * @return array|boolean
+ */
+function taxonomy_menu_sync_get_term_bundle($term){
+	$bundles = variable_get('taxonomy_menu_sync_bundles_'.$term->vocabulary_machine_name, array());
+	foreach($bundles as $bundle){
+		$field_name = $bundle['field'];
+		$items = field_get_items('taxonomy_term', $term, $field_name);
+		$item = reset($items);
+		if($item['value'] == $bundle['value']){
+			return $bundle;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * @param array $bundle
+ * @return array|boolean
+ */
+function taxonomy_menu_sync_get_bundle_settings($bundle){
+	if(!isset($bundle['vocabulary']) || !isset($bundle['machine_name']) || !isset($bundle['field'])){
+		return false;
+	}
+
+	$bundle_settings = variable_get('taxonomy_menu_sync_'.$bundle['vocabulary'].'__'.$bundle['machine_name'].'_data', array());
+	$bundle_settings[$bundle['field']] = array(
+		'mode' => 0,
+		'default_value' => $bundle['value']
+	);
+
+	return $bundle_settings;
+}
+
+/**
+ * @param object $term
+ * @param array $bundle_settings
+ * @param array $form
+ */
+function _taxonomy_menu_sync_alter_term_form($term, $bundle_settings, &$form, &$form_state){
+	$langcode = entity_language('taxonomy_term', $term);
+	$language = $langcode ? field_valid_language($langcode) : LANGUAGE_NONE;
+
+	// Default values
+	foreach($bundle_settings as $field_name => $data){
+		// Only set default value if field is not defined
+		if(isset($term->{$field_name})){
+			continue;
+		}
+
+		$field = field_info_field($field_name);
+		switch($field['type']){
+			case 'text':
+			default:
+				$key = 'value';
+				break;
+		}
+		$term->{$field_name} = array(
+			$language => array(
+				0 => array(
+					$key => $data['default_value']
+				)
+			)
+		);
+	}
+	field_attach_form('taxonomy_term', $term, $form, $form_state, $langcode);
+
+	// Alter fields with bundle_settings
+	foreach($bundle_settings as $field_name => $data){
+		if(!isset($form[$field_name])){
+			continue;
+		}
+
+		$field = field_info_field($field_name);
+		switch($field['type']){
+			case 'text':
+			default:
+				$key = 'value';
+				break;
+		}
+
+		switch($data['mode']){
+			// Disabled
+			case 0:
+				if(empty($data['default_value'])){
+					unset($form[$field_name]);
+				}else{
+					$form[$field_name]['#access'] = false;
+				}
+				break;
+
+			// Visible
+			case 1:
+				break;
+
+			// Required
+			case 2:
+				$form[$field_name][$language][0][$key]['#required'] = true;
+				break;
+		}
+	}
+
 }

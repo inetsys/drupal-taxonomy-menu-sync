@@ -9,6 +9,9 @@ Clean default actions on menu items from content menu module.
 Define subbundles inside a taxonomy vocabulary.  
 Create any subbundle term from menu management.
 
+- Taxonomy form included in menu item edit form  
+Fields filtered by taxonomy bundle.
+
 ## Version 1.0 
 
 Date: 2014/11/26

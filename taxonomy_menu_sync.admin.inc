@@ -188,6 +188,7 @@ function taxonomy_menu_sync_vocabulary_add_bundle_submit($form, &$form_state){
 	) as $system_field){
 		unset($values[$system_field]);
 	}
+	$values['vocabulary'] = $vocabulary->machine_name;
 	$bundles[$values['machine_name']] = $values;
 
 	variable_set('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, $bundles);
@@ -280,6 +281,7 @@ function taxonomy_menu_sync_vocabulary_edit_bundle_submit($form, &$form_state){
 	) as $system_field){
 		unset($values[$system_field]);
 	}
+	$values['vocabulary'] = $vocabulary->machine_name;
 	$bundles[$bundle['machine_name']] = $values;
 
 	variable_set('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, $bundles);
