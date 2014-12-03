@@ -1,6 +1,8 @@
 # Taxonomy Menu Sync
 
-## Version 1.x-dev
+## Version 1.1
+
+Date: 2014/12/03
 
 - Configure default actions  
 Clean default actions on menu items from content menu module.
