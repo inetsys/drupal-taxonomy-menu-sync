@@ -19,3 +19,25 @@ function hook_taxonomy_term_sync_modified($new_term, $old_term){
 		}
 	}
 }
+
+/**
+ * @param array $item
+ * @param object $term
+ * @param array $bundle
+ * @return array
+ */
+function hook_menu_item_element_bundle_operations($item, $term, $bundle){
+	return array(
+		'add_page' => array(
+			'#type' => 'link',
+			'#title' => t('add new content'),
+			'#href' => 'node/add/page',
+			'#options' => array(
+				'query' => array(
+					'field_taxonomy_term' => $term->tid
+				),
+			),
+			'weight' => 20,
+		)
+	);
+}

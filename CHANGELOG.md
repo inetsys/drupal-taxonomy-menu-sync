@@ -1,5 +1,10 @@
 # Taxonomy Menu Sync
 
+## Version 1.x-dev
+
+- Hook `menu_item_element_bundle_operations`  
+Allow other modules to add operations over a menu item when it has a referenced taxonmy term of a defined taxonomy bundle.
+
 ## Version 1.1
 
 Date: 2014/12/03

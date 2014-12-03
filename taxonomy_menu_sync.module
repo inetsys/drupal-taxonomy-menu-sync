@@ -237,7 +237,16 @@ function taxonomy_menu_sync_menu_item_element_alter(&$element){
 	// @todo Describe bundles
 	if($item['router_path'] == 'taxonomy/term/%'){
 		// Set title 'Section' if it references a taxonomy term
-		$element['target_content']['#markup'] = t('Section');
+		module_load_include('inc', 'taxonomy_menu_sync');
+		$term = taxonomy_term_sync_get_taxonomy_term($item['mlid']);
+		$bundle = taxonomy_menu_sync_get_term_bundle($term);
+
+		$element['target_content']['#markup'] = $term && $bundle ? ucfirst($bundle['name']) : t('Section');
+
+		if($term && $bundle){
+			$options = module_invoke_all('menu_item_element_bundle_operations', $item, $term, $bundle);
+			$element['operations'] = array_merge($element['operations'], $options);
+		}
 
 		// Remove operation "Select existing content"
 		if(isset($element['operations']['selectcontent'])){
