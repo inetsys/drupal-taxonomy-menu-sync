@@ -391,9 +391,9 @@ function taxonomy_menu_sync_form_menu_edit_item_alter_submit($form, &$form_state
 		drupal_set_message(t('Your configuration has been saved.'));
 	}
 	$form_state['redirect'] = 'admin/structure/menu/manage/'.$item['menu_name'];
-
 }
 
+/** Menu callback for admin/structure/menu/manage/%menu/add-item/%taxonomy_bundle_machine_name */
 function taxonomy_menu_sync_add_taxonomy_term_form($form, &$form_state, $menu, $bundle_machine_name){
 	$vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu['menu_name']);
 	$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
@@ -456,4 +456,17 @@ function taxonomy_menu_sync_add_taxonomy_term_form_submit($form, &$form_state){
 	$menu_item['term'] = $term;
 
 	content_menu_link_save($menu_item);
+}
+
+/** Implementation of hook_form_FORM_ID_alter
+ * Form ID: taxonomy_form_term
+ */
+function taxonomy_menu_sync_form_taxonomy_form_term_alter(&$form, &$form_state){
+	module_load_include('inc', 'taxonomy_menu_sync');
+
+	$term = $form['#entity'];
+	$bundle = taxonomy_menu_sync_get_term_bundle($term);
+	$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
+
+	_taxonomy_menu_sync_alter_term_form($term, $bundle_settings, $form, $form_state);
 }
