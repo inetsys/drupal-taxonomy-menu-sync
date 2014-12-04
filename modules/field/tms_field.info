@@ -1,0 +1,7 @@
+name = Taxonomy Menu Sync: Field
+description = Defines field type taxonomy bundle term reference
+version = 7.x-1.0
+core = 7.x
+package = Fields
+dependencies[] = taxonomy
+dependencies[] = taxonomy_menu_sync

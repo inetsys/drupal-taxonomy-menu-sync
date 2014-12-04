@@ -1,0 +1,19 @@
+.indented-option:after {
+	content: '.';
+	display: block;
+	clear: both;
+	visibility: hidden;
+	line-height: 0;
+	height: 0;
+}
+
+.tree-indent {
+	display: block;
+	visibility: hidden;
+	width: 30px;
+	float:left;
+}
+
+.indented-option .form-item {
+	padding: 0;
+}

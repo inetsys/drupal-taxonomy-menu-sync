@@ -303,9 +303,9 @@ function taxonomy_menu_sync_menu_item_target_types_alter(&$target_types, $contex
 }
 /** Handler for target tax_sync */
 function _taxonomy_menu_sync_target_type_tax_sync_handler($form, $form_state, $item){
-  drupal_set_message(t('A new menu item has been created.'));
-  $item['link_path'] = 'sync_tax';
-  content_menu_link_save($item);
+	drupal_set_message(t('A new menu item has been created.'));
+	$item['link_path'] = 'sync_tax';
+	content_menu_link_save($item);
 }
 /** Handler for target bundle */
 function _taxonomy_menu_target_type_taxonomy_bundle_handler($form, $form_state, $item, $vocabulary, $bundle){

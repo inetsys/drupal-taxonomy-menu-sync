@@ -1,9 +1,15 @@
 # Taxonomy Menu Sync
 
-## Version 1.x-dev
+## Version 1.2
+
+Date_ 2014/12/04
 
 - Hook `menu_item_element_bundle_operations`  
 Allow other modules to add operations over a menu item when it has a referenced taxonmy term of a defined taxonomy bundle.
+
+- Module *tms_field*  
+	- Field type *taxonomy bundle term reference*
+	- Widget with radios or checkboxes. Depends on field cardinality.
 
 ## Version 1.1
 
