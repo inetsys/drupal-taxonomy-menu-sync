@@ -7,7 +7,7 @@
 function taxonomy_menu_sync_get_synchronized_vocabulary($menu_name){
 	$config = variable_get('taxonomy_menu_sync_list', array());
 
-	return isset($config[$menu_name]) && $config[$menu_name] ? taxonomy_vocabulary_machine_name_load($config[$menu_name]) : false;
+	return isset($config[$menu_name]) && $config[$menu_name] ? taxonomy_vocabulary_machine_name_load($config[$menu_name]['vocabulary']) : false;
 }
 
 /**
@@ -503,15 +503,4 @@ function _taxonomy_menu_sync_alter_term_form($term, $bundle_settings, &$form, &$
 		}
 	}
 
-}
-
-function taxonomy_menu_sync_get_terms_list($vocabulary){
-	$list = array();
-	$terms = taxonomy_get_tree($vocabulary->vid, 0, null, true);
-	foreach($terms as $term){
-		$term->bundle = taxonomy_menu_sync_get_term_bundle($term);
-		$list[$term->tid] = $term;
-	}
-
-	return $list;
 }

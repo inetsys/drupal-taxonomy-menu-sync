@@ -1,5 +1,10 @@
 # Taxonomy Menu Sync
 
+## Version 1.x-dev
+
+- Synchronized menus ordered by weight  
+Taxonomy terms are ordered in field widget using synchronized menu weights
+
 ## Version 1.2
 
 Date_ 2014/12/04

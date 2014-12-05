@@ -6,6 +6,7 @@ It uses *content menu* module to manages actions over menu items.
 ## Dependencies
 
 - Content Menu
+- Taxonomy
 
 ## Notes
 

@@ -23,14 +23,34 @@ function taxonomy_menu_sync_settings_form($form, &$form_state){
 
 	foreach($menus as $key => $label){
 		$form['taxonomy_menu_sync_list'][$key] = array(
+			'#type' => 'fieldset',
 			'#title' => $label,
+			'#collapsible' => true,
+			'#collapsed' => !isset($defaults[$key]['vocabulary']) || !$defaults[$key]['vocabulary'],
+		);
+		// Vocabulary
+		$form['taxonomy_menu_sync_list'][$key]['vocabulary'] = array(
+			'#title' => t('Vocabulary'),
 			'#type' => 'select',
 			'#options' => $options,
-			'#default_value' => isset($defaults[$key]) ? $defaults[$key] : '',
+			'#default_value' => isset($defaults[$key]['vocabulary']) ? $defaults[$key]['vocabulary'] : '',
+		);
+		// Weight
+		$form['taxonomy_menu_sync_list'][$key]['weight'] = array(
+			'#type' => 'weight',
+			'#title' => t('Weight'),
+			'#default_value' => isset($defaults[$key]['weight']) ? $defaults[$key]['weight'] : '',
+			'#states' => array(
+				'invisible' => array(
+					'select[name="taxonomy_menu_sync_list['.$key.'][vocabulary]"]' => array(
+						'value' => 0
+					)
+				)
+			)
 		);
 	}
 
-	// Delete default *Placeholder* action
+	// Delete default actions from content_menu module
 
 	$form['taxonomy_menu_sync_default_actions'] = array(
 		'#type' => 'checkboxes',
