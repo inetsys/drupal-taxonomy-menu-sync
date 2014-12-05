@@ -87,7 +87,7 @@ function tms_field_field_widget_form(&$form, &$form_state, $field, $instance, $l
 
 			if($vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary_machine_name)){
 				$list = tms_field_get_terms_list($vocabulary, $bundle_machine_name);
-
+				// print_r($list);exit;
 				$options = array();
 
 				if($field['cardinality'] == 1){
@@ -155,10 +155,9 @@ function tms_field_field_widget_validate($element, &$form_state){
 		if(!$term_bundle || $term_bundle['machine_name'] != $element['#taxonomy_bundle'] || $term->vid != $element['#taxonomy_vocabulary']->vid){
 			form_error($element, $element['#title'].': '.t('An illegal choice has been detected.'));
 		}else{
-			$valid_values[] = $value;
+			$valid_values[] = array('tid' => $value);
 		}
 	}
-
 	form_set_value($element, $valid_values, $form_state);
 }
 
