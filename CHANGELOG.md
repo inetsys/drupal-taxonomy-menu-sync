@@ -1,13 +1,15 @@
 # Taxonomy Menu Sync
 
-## Version 1.x-dev
+## Version 1.3
+
+Date: 2014/12/05
 
 - Synchronized menus ordered by weight  
 Taxonomy terms are ordered in field widget using synchronized menu weights
 
 ## Version 1.2
 
-Date_ 2014/12/04
+Date: 2014/12/04
 
 - Hook `menu_item_element_bundle_operations`  
 Allow other modules to add operations over a menu item when it has a referenced taxonmy term of a defined taxonomy bundle.
