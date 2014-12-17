@@ -126,6 +126,7 @@ function taxonomy_menu_sync_get_children_terms($tid){
 	$tids = $query
 		->fields('td' ,array('tid'))
 		->condition('th.parent', $tid)
+		->orderBy('td.weight', 'asc')
 		->execute()
 		->fetchCol();
 
@@ -157,10 +158,10 @@ function _taxonomy_menu_sync_move_child_term($term, $parent){
 
 		$relations = taxonomy_menu_get_term_relations($term->tid);
 		if(count($relations) == 1){
-			// Delete old term
-			taxonomy_term_delete($term->tid);
 			// Let other modules modify anything about this new term
 			module_invoke_all('taxonomy_term_sync_modified', $existing, $term);
+			// Delete old term
+			taxonomy_term_delete($term->tid);
 		}
 	}else{
 		$relations = taxonomy_menu_get_term_relations($term->tid);
@@ -212,10 +213,10 @@ function _taxonomy_menu_sync_update_child_item($item, $parent){
 
 		$relations = taxonomy_menu_get_term_relations($term->tid);
 		if(count($relations) == 1){
-			// Delete old term
-			taxonomy_term_delete($term->tid);
 			// Let other modules modify anything about this new term
 			module_invoke_all('taxonomy_term_sync_modified', $existing, $term);
+			// Delete old term
+			taxonomy_term_delete($term->tid);
 		}
 		// Delete old reference
 		taxonomy_menu_sync_delete_relation($term->tid, $item['mlid']);
@@ -347,16 +348,17 @@ function taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_ti
 			}
 
 			if(count($relations) == 1){
+				// Let other modules modify anything about this new term
+				module_invoke_all('taxonomy_term_sync_modified', $existing, $term);
 				taxonomy_term_delete($term->tid);
-			}
-
-			// Let other modules modify anything about this new term
-			if($original->tid != $existing->tid){
-				module_invoke_all('taxonomy_term_sync_modified', $existing, $original);
 			}
 
 			$return = $existing;
 		}
+	}else{
+		// It's just a weight change
+		$term->weight = $item['weight'];
+		taxonomy_term_save($term);
 	}
 
 	return $return;

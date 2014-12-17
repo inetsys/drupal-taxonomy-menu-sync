@@ -5,18 +5,39 @@
  * @param object $old_term
  */
 function hook_taxonomy_term_sync_modified($new_term, $old_term){
-	$query = new EntityFieldQuery();
-	$query->entityCondition('entity_type', 'node');
-	$query->fieldCondition('FIELD_NAME', 'tid', $old_term->tid);
-	$result = $query->execute();
+	$query = db_select('taxonomy_index', 'ti');
+	$query->join('node', 'n', 'ti.nid = n.nid');
+	$nids = $query
+		->fields('ti', array('nid'))
+		->condition('ti.tid', $term->tid)
+		->condition('n.type', 'NODE_TYPE')
+		->execute()
+		->fetchCol();
+	$nodes = entity_load('node', $nids);
 
-	if(isset($result['node'])){
-		$nodes = entity_load('node', array_keys($result['node']));
+	foreach($nodes as $node){
+		// Update each node with new taxonomy term tid
+		// ...
+	}
+}
 
-		foreach($nodes as $node){
-			// Update each node with new taxonomy term tid
-			// ...
-		}
+/**
+ * @param object $term
+ */
+function sitetype_article_taxonomy_term_sync_deleted($term){
+	$query = db_select('taxonomy_index', 'ti');
+	$query->join('node', 'n', 'ti.nid = n.nid');
+	$nids = $query
+		->fields('ti', array('nid'))
+		->condition('ti.tid', $term->tid)
+		->condition('n.type', 'NODE_TYPE')
+		->execute()
+		->fetchCol();
+	$nodes = entity_load('node', $nids);
+
+	foreach($nodes as $node){
+		// Update each node deleting old taxonomy term tid
+		// ...
 	}
 }
 

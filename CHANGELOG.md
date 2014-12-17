@@ -1,5 +1,14 @@
 # Taxonomy Menu Sync
 
+## Version 1.4
+
+Date: 2014/12/17
+
+- Hook `sitetype_article_taxonomy_term_sync_deleted`  
+Allows other modules to modify any conotent affected by the removing of a taxonomy term
+
+- Hooks are called before deleting any taxonomy term
+
 ## Version 1.3
 
 Date: 2014/12/05

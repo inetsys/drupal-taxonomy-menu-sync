@@ -217,6 +217,7 @@ function taxonomy_menu_sync_menu_link_delete($item){
 		if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
 			$relations = taxonomy_menu_get_term_relations($term->tid);
 			if(count($relations) == 1 && in_array($item['mlid'], $relations)){
+				module_invoke_all('taxonomy_term_sync_deleted', $term);
 				taxonomy_term_delete($term->tid);
 			}else{
 				taxonomy_menu_sync_delete_relation($term->tid, $item['mlid']);
