@@ -305,9 +305,9 @@ function taxonomy_menu_update_menu_item_referenced_term($item, $term, $parent_ti
 
 				$return = $term;
 			}else{
-				// create a new term
-				$new_term = new stdClass();
-				$new_term->vid = $term->vid;
+				// create a new term as a copy of original term
+				$new_term = clone $term;
+				unset($new_term->tid);
 				$new_term->name = $label;
 				$new_term->parent = $parent_tid;
 				$new_term->weight = $item['weight'];
@@ -449,7 +449,7 @@ function _taxonomy_menu_sync_alter_term_form($term, $bundle_settings, &$form, &$
 	// Default values
 	foreach($bundle_settings as $field_name => $data){
 		// Only set default value if field is not defined
-		if(isset($term->{$field_name})){
+		if(isset($term->{$field_name}) || ($data['mode'] == 0 && empty($data['default_value']))){
 			continue;
 		}
 
@@ -468,6 +468,10 @@ function _taxonomy_menu_sync_alter_term_form($term, $bundle_settings, &$form, &$
 			)
 		);
 	}
+	$form['original_term'] = array(
+		'#type' => 'value',
+		'#value' => $term,
+	);
 	field_attach_form('taxonomy_term', $term, $form, $form_state, $langcode);
 
 	// Alter fields with bundle_settings
@@ -504,5 +508,4 @@ function _taxonomy_menu_sync_alter_term_form($term, $bundle_settings, &$form, &$
 				break;
 		}
 	}
-
 }
