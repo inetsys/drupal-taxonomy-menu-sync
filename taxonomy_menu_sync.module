@@ -1,6 +1,6 @@
 <?php
 
-/** Implementation of hook_permission */
+/** Implements hook_permission() */
 function taxonomy_menu_sync_permission(){
 	return array(
 		'administer taxonomy menu sync' => array(
@@ -12,7 +12,7 @@ function taxonomy_menu_sync_permission(){
 	);
 }
 
-/** Implementation of hook_help */
+/** Implements hook_help() */
 function taxonomy_menu_sync_help($path, $arguments){
 	switch($path){
 		case 'admin/structure/menu/manage/%':
@@ -20,7 +20,7 @@ function taxonomy_menu_sync_help($path, $arguments){
 	}
 }
 
-/** Implementation of hook_menu */
+/** Implements hook_menu() */
 function taxonomy_menu_sync_menu(){
 	$items = array();
 
@@ -104,7 +104,7 @@ function taxonomy_bundle_machine_name_load($name){
 	return str_replace('-', '_', $name);
 }
 
-/** Implementation of hook_menu_alter */
+/** Implements hook_menu_alter() */
 function taxonomy_menu_sync_menu_alter(&$items){
 	$items['admin/structure/menu/item/%menu_link/delete']['access callback'] = '_taxonomy_menu_sync_access_callback_menu_link_delete';
 	$items['admin/structure/menu/item/%menu_link/delete']['access arguments'][] = 4;
@@ -146,7 +146,87 @@ function _taxonomy_menu_sync_dummy_menu(){
 	return '';
 }
 
-/** Implementation of hook_menu_link_insert */
+/** Implements hook_module_implements_alter() */
+function taxonomy_menu_sync_module_implements_alter(&$implementations, $hook){
+	if(in_array($hook, array('node_insert', 'node_update')) && isset($implementations['taxonomy'])){
+		unset($implementations['taxonomy']);
+	}
+}
+
+/** Implements hook_node_insert() */
+function taxonomy_menu_sync_node_insert($node){
+	// Add taxonomy index entries for the node.
+	taxonomy_menu_sync_build_node_index($node);
+}
+
+/** Implements hook_node_update() */
+function taxonomy_menu_sync_node_update($node){
+	taxonomy_delete_node_index($node);
+	taxonomy_menu_sync_build_node_index($node);
+}
+
+/** Implements hook_node_delete() */
+function taxonomy_menu_sync_node_delete($node){
+	// Clean up the {taxonomy_index} table when nodes are deleted.
+	taxonomy_delete_node_index($node);
+}
+
+/** Builds and inserts taxonomy index entries for a given node */
+function taxonomy_menu_sync_build_node_index($node){
+	// Modules that define taxonomy fields
+	$taxonomy_fields_modules = variable_get('taxonomy_fields_modules', array('taxonomy', 'tms_field'));
+
+	if(variable_get('taxonomy_maintain_index_table', TRUE)){
+		// If a node property is not set in the node object when node_save() is
+		// called, the old value from $node->original is used.
+		if(!empty($node->original)){
+			$sticky = (int)(!empty($node->sticky) || (!isset($node->sticky) && !empty($node->original->sticky)));
+		}else{
+			$sticky = (int)(!empty($node->sticky));
+		}
+	}
+
+	// Collect a unique list of all the term IDs from all node fields.
+	$tid_all = array();
+	foreach(field_info_instances('node', $node->type) as $instance){
+		$field_name = $instance['field_name'];
+		$field = field_info_field($field_name);
+		if(in_array($field['module'], $taxonomy_fields_modules) && $field['storage']['type'] == 'field_sql_storage'){
+			// If a field value is not set in the node object when node_save() is
+			// called, the old value from $node->original is used.
+			if(isset($node->{$field_name})){
+				$items = $node->{$field_name};
+			}elseif(isset($node->original->{$field_name})){
+				$items = $node->original->{$field_name};
+			}else{
+				continue;
+			}
+			foreach(field_available_languages('node', $field) as $langcode){
+				if(!empty($items[$langcode])){
+					foreach($items[$langcode] as $item){
+						$tid_all[$item['tid']] = $item['tid'];
+					}
+				}
+			}
+		}
+	}
+
+	// Insert index entries for all the node's terms.
+	if(!empty($tid_all)){
+		$query = db_insert('taxonomy_index')->fields(array('nid', 'tid', 'sticky', 'created'));
+		foreach($tid_all as $tid){
+			$query->values(array(
+				'nid' => $node->nid,
+				'tid' => $tid,
+				'sticky' => $sticky,
+				'created' => $node->created,
+			));
+		}
+		$query->execute();
+	}
+}
+
+/** Implements hook_menu_link_insert() */
 function taxonomy_menu_sync_menu_link_insert($item){
 	module_load_include('inc', 'taxonomy_menu_sync');
 
@@ -178,7 +258,7 @@ function taxonomy_menu_sync_menu_link_insert($item){
 	}
 }
 
-/** Implementation of hook_menu_link_update */
+/** Implements hook_menu_link_update() */
 function taxonomy_menu_sync_menu_link_update($item){
 	module_load_include('inc', 'taxonomy_menu_sync');
 
@@ -201,7 +281,7 @@ function taxonomy_menu_sync_menu_link_update($item){
 	}
 }
 
-/** Implementation of hook_menu_link_delete */
+/** Implements hook_menu_link_delete() */
 function taxonomy_menu_sync_menu_link_delete($item){
 	module_load_include('inc', 'taxonomy_menu_sync');
 
@@ -220,7 +300,7 @@ function taxonomy_menu_sync_menu_link_delete($item){
 	}
 }
 
-/** Implementation of hook_menu_item_element_alter */
+/** Implements hook_menu_item_element_alter() */
 function taxonomy_menu_sync_menu_item_element_alter(&$element){
 	$item = $element['#item'];
 
@@ -250,7 +330,7 @@ function taxonomy_menu_sync_menu_item_element_alter(&$element){
 	}
 }
 
-/** Implementation of hook_menu_item_target_types_alter */
+/** Implements hook_menu_item_target_types_alter() */
 function taxonomy_menu_sync_menu_item_target_types_alter(&$target_types, $context){
 	module_load_include('inc', 'taxonomy_menu_sync');
 	$menu_name = $context['menu_name'];
@@ -330,14 +410,14 @@ function _taxonomy_menu_target_type_taxonomy_bundle_handler($form, $form_state, 
 	drupal_goto('admin/structure/menu/manage/'.$item['name'].'/add-item/'.str_replace('_', '-', $bundle['machine_name']), array('query' => content_menu_assemble_query_string($item)));
 }
 
-/** Implementation of hook_taxonomy_term_delete */
+/** Implements hook_taxonomy_term_delete() */
 function taxonomy_menu_sync_taxonomy_term_delete($term){
 	module_load_include('inc', 'taxonomy_menu_sync');
 
 	taxonomy_menu_sync_delete_all_relations($term->tid);
 }
 
-/** Implementation of hook_form_FORM_ID_alter
+/** Implements hook_form_FORM_ID_alter()
  * Form ID: menu_edit_item
  */
 function taxonomy_menu_sync_form_menu_edit_item_alter(&$form, &$form_state){
@@ -504,51 +584,55 @@ function taxonomy_menu_sync_add_taxonomy_term_form_submit($form, &$form_state){
 	content_menu_link_save($menu_item);
 }
 
-/** Implementation of hook_form_FORM_ID_alter
+/** Implements hook_form_FORM_ID_alter()
  * Form ID: taxonomy_form_term
  */
 function taxonomy_menu_sync_form_taxonomy_form_term_alter(&$form, &$form_state){
 	module_load_include('inc', 'taxonomy_menu_sync');
 
-	$term = $form['#entity'];
-	$bundle = taxonomy_menu_sync_get_term_bundle($term);
-	$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
+	$term = isset($form['#entity']) ? $form['#entity'] : false;
+	if($term){
+		$bundle = taxonomy_menu_sync_get_term_bundle($term);
+		if($bundle){
+			$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
 
-	$langcode = entity_language('taxonomy_term', $term);
-	$language = $langcode ? field_valid_language($langcode) : LANGUAGE_NONE;
+			$langcode = entity_language('taxonomy_term', $term);
+			$language = $langcode ? field_valid_language($langcode) : LANGUAGE_NONE;
 
-	// Alter fields with bundle_settings
-	foreach($bundle_settings as $field_name => $data){
-		if(!isset($form[$field_name])){
-			continue;
-		}
-
-		$field = field_info_field($field_name);
-		switch($field['type']){
-			case 'text':
-			default:
-				$key = 'value';
-				break;
-		}
-
-		switch($data['mode']){
-			// Disabled
-			case 0:
-				if(empty($data['default_value'])){
-					unset($form[$field_name]);
-				}else{
-					$form[$field_name]['#access'] = false;
+			// Alter fields with bundle_settings
+			foreach($bundle_settings as $field_name => $data){
+				if(!isset($form[$field_name])){
+					continue;
 				}
-				break;
 
-			// Visible
-			case 1:
-				break;
+				$field = field_info_field($field_name);
+				switch($field['type']){
+					case 'text':
+					default:
+						$key = 'value';
+						break;
+				}
 
-			// Required
-			case 2:
-				$form[$field_name][$language][0][$key]['#required'] = true;
-				break;
+				switch($data['mode']){
+					// Disabled
+					case 0:
+						if(empty($data['default_value'])){
+							unset($form[$field_name]);
+						}else{
+							$form[$field_name]['#access'] = false;
+						}
+						break;
+
+					// Visible
+					case 1:
+						break;
+
+					// Required
+					case 2:
+						$form[$field_name][$language][0][$key]['#required'] = true;
+						break;
+				}
+			}
 		}
 	}
 }
