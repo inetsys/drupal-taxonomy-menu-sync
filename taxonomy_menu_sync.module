@@ -2,7 +2,7 @@
 
 /** Implements hook_permission() */
 function taxonomy_menu_sync_permission(){
-	return array(
+	$perms = array(
 		'administer taxonomy menu sync' => array(
 			'title' => t('Administer taxonomy menu sync')
 		),
@@ -10,6 +10,25 @@ function taxonomy_menu_sync_permission(){
 			'title' => t('Create synchronized taxonomy terms')
 		)
 	);
+
+	module_load_include('inc', 'taxonomy_menu_sync');
+	foreach(menu_load_all() as $menu){
+		$vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu['menu_name']);
+		if(!$vocabulary){
+			continue;
+		}
+		$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
+		foreach($bundles as $bundle){
+			$perms['create synchronized '.$bundle['machine_name'].' term in '.$menu['menu_name']] = array(
+				'title' => t('Create synchronized term of bundle %bundle in menu %menu', array(
+					'%bundle' => $bundle['name'],
+					'%menu' => $menu['title']
+				)),
+			);
+		}
+	}
+
+	return $perms;
 }
 
 /** Implements hook_help() */
@@ -82,7 +101,7 @@ function taxonomy_menu_sync_menu(){
 		'title' => 'Add new section',
 		'type' => MENU_CALLBACK,
 		'access callback' => '_taxonomy_menu_sync_access_callback_menu_add_item',
-		'access arguments' => array('create synchronized taxonomy terms', 4, 6),
+		'access arguments' => array(4, 6),
 		'page callback' => 'drupal_get_form',
 		'page arguments' => array('taxonomy_menu_sync_add_taxonomy_term_form', 4, 6),
 	);
@@ -108,6 +127,10 @@ function taxonomy_bundle_machine_name_load($name){
 function taxonomy_menu_sync_menu_alter(&$items){
 	$items['admin/structure/menu/item/%menu_link/delete']['access callback'] = '_taxonomy_menu_sync_access_callback_menu_link_delete';
 	$items['admin/structure/menu/item/%menu_link/delete']['access arguments'][] = 4;
+
+	if(isset($items['admin/structure/menu/manage/add_existing_content'])){
+		unset($items['admin/structure/menu/manage/add_existing_content']);
+	}
 }
 
 /** Access callback to admin/structure/menu/item/%menu_link/delete */
@@ -116,8 +139,8 @@ function _taxonomy_menu_sync_access_callback_menu_link_delete($perm, $link){
 	return user_access($perm) && !$link['has_children'];
 }
 /** Access callback to admin/structure/menu/manage/%menu/add-item/%taxonomy_bundle_machine_name */
-function _taxonomy_menu_sync_access_callback_menu_add_item($perm, $menu, $bundle_machine_name){
-	if(!user_access($perm)){
+function _taxonomy_menu_sync_access_callback_menu_add_item($menu, $bundle_machine_name){
+	if(!user_access('create synchronized taxonomy terms') && !user_access('create synchronized '.$bundle_machine_name.' term in '.$menu['menu_name'])){
 		return false;
 	}
 
@@ -364,15 +387,17 @@ function taxonomy_menu_sync_menu_item_target_types_alter(&$target_types, $contex
 
 		$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
 		foreach($bundles as $key => $data){
-			$target_types['bundle_'.$key] = array(
-				'label' => $data['name'],
-				'handler' => '_taxonomy_menu_target_type_taxonomy_bundle_handler',
-				'clean_menu_save_message' => true,
-				'arguments' => array(
-					'vocabulary' => $vocabulary,
-					'bundle' => $data
-				)
-			);
+			if(user_access('create synchronized '.$data['machine_name'].' term in '.$menu_name)){
+				$target_types['bundle_'.$key] = array(
+					'label' => $data['name'],
+					'handler' => '_taxonomy_menu_target_type_taxonomy_bundle_handler',
+					'clean_menu_save_message' => true,
+					'arguments' => array(
+						'vocabulary' => $vocabulary,
+						'bundle' => $data
+					)
+				);
+			}
 		}
 	}
 }

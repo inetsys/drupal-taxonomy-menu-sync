@@ -1,5 +1,11 @@
 # Taxonomy Menu Sync
 
+## Version 1.x-dev
+
+- Access management  
+Access permission to add terms of each bundle in each vocabulary  
+Access permission to each action over menu items
+
 ## Version 1.4
 
 Date: 2014/12/17
