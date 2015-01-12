@@ -254,13 +254,13 @@ function taxonomy_menu_sync_menu_link_insert($item){
 	module_load_include('inc', 'taxonomy_menu_sync');
 
 	$menu_name = $item['menu_name'];
-	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
+	if(isset($item['term']) && $vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
 		$label = $item['link_title'];
 		$parent_term = taxonomy_term_sync_get_taxonomy_term($item['plid']);
 		$weight = $item['weight'];
 
 		// Save new term
-		$term = isset($item['term']) ? $item['term'] : new stdClass();
+		$term = $item['term'];
 		if(!isset($term->tid)){
 			$term->vid = $vocabulary->vid;
 			$term->vocabulary_machine_name = $vocabulary->machine_name;
@@ -286,8 +286,7 @@ function taxonomy_menu_sync_menu_link_update($item){
 	module_load_include('inc', 'taxonomy_menu_sync');
 
 	$menu_name = $item['menu_name'];
-	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name)){
-		$term = taxonomy_term_sync_get_taxonomy_term($item['mlid']);
+	if($vocabulary = taxonomy_menu_sync_get_synchronized_vocabulary($menu_name) && $term = taxonomy_term_sync_get_taxonomy_term($item['mlid'])){
 		$menu_parent_term = taxonomy_term_sync_get_taxonomy_term($item['plid']);
 		$parent_tid = $menu_parent_term ? $menu_parent_term->tid : 0;
 
@@ -472,25 +471,27 @@ function taxonomy_menu_sync_form_menu_edit_item_alter(&$form, &$form_state){
 
 		// Taxonomy term
 		$term = taxonomy_term_sync_get_taxonomy_term($mlid);
-		$bundle = taxonomy_menu_sync_get_term_bundle($term);
-		$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
+		if($term){
+			$bundle = taxonomy_menu_sync_get_term_bundle($term);
+			$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
 
-		$form['original_term'] = array(
-			'#type' => 'value',
-			'#value' => $term
-		);
-		$form['settings'] = array(
-			'#type' => 'fieldset',
-			'#title' => t('Settings'),
-			'#collapsible' => true,
-			'#collapsed' => false,
-		);
+			$form['original_term'] = array(
+				'#type' => 'value',
+				'#value' => $term
+			);
+			$form['settings'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('Settings'),
+				'#collapsible' => true,
+				'#collapsed' => false,
+			);
 
-		_taxonomy_menu_sync_alter_term_form($term, $bundle_settings, $form['settings'], $form_state);
+			_taxonomy_menu_sync_alter_term_form($term, $bundle_settings, $form['settings'], $form_state);
 
-		foreach($form['#submit'] as $i => &$callable){
-			if($callable == 'menu_edit_item_submit'){
-				$callable = 'taxonomy_menu_sync_form_menu_edit_item_alter_submit';
+			foreach($form['#submit'] as $i => &$callable){
+				if($callable == 'menu_edit_item_submit'){
+					$callable = 'taxonomy_menu_sync_form_menu_edit_item_alter_submit';
+				}
 			}
 		}
 	}
