@@ -115,6 +115,23 @@ function taxonomy_menu_sync_menu(){
 		);
 	}
 
+	// Add bundle term
+	$vocabularies = taxonomy_get_vocabularies();
+	foreach($vocabularies as $vocabulary){
+		$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
+		foreach($bundles as $bundle){
+			$items['admin/structure/taxonomy/'.$vocabulary->machine_name.'/bundles/'.str_replace('_', '-', $bundle['machine_name']).'/add'] = array(
+				'title' => 'Add '.$bundle['name'],
+				'page callback' => 'drupal_get_form',
+				'page arguments' => array('taxonomy_menu_sync_vocabulary_add_term_of_bundle', 3, 5),
+				'access arguments' => array('administer taxonomy'),
+				'type' => MENU_LOCAL_ACTION,
+				'weight' => 0,
+				'file' => 'taxonomy_menu_sync.admin.inc'
+			);
+		}
+	}
+
 	return $items;
 }
 

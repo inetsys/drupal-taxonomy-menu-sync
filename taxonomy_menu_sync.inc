@@ -455,6 +455,11 @@ function _taxonomy_menu_sync_alter_term_form($term, $bundle_settings, &$form, &$
 
 		$field = field_info_field($field_name);
 		switch($field['type']){
+			case 'taxonomy_term_bundle_reference':
+			case 'taxonomy_term_reference':
+				$key = 'tid';
+				break;
+
 			case 'text':
 			default:
 				$key = 'value';
@@ -482,6 +487,11 @@ function _taxonomy_menu_sync_alter_term_form($term, $bundle_settings, &$form, &$
 
 		$field = field_info_field($field_name);
 		switch($field['type']){
+			case 'taxonomy_term_bundle_reference':
+			case 'taxonomy_term_reference':
+				$key = 'tid';
+				break;
+
 			case 'text':
 			default:
 				$key = 'value';
@@ -508,4 +518,23 @@ function _taxonomy_menu_sync_alter_term_form($term, $bundle_settings, &$form, &$
 				break;
 		}
 	}
+}
+
+/**
+ * @param object $vocabulary
+ * @param string $bundle_machine_name
+ * @return array
+ */
+function taxonomy_menu_sync_get_bundle_terms($vocabulary, $bundle_machine_name){
+	$bundle_terms = array();
+
+	$terms = entity_load('taxonomy_term', FALSE, array('vid' => $vocabulary->vid));
+	foreach($terms as $term){
+		$term_bundle = taxonomy_menu_sync_get_term_bundle($term);
+		if($term_bundle && $term_bundle['machine_name'] == $bundle_machine_name){
+			$bundle_terms[$term->tid] = $term;
+		}
+	}
+
+	return $bundle_terms;
 }

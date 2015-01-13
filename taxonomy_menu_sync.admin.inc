@@ -461,3 +461,84 @@ function taxonomy_menu_sync_vocabulary_delete_bundle_submit($form, &$form_state)
 	$form_state['redirect'] = 'admin/structure/taxonomy/'.$vocabulary->machine_name.'/bundles';
 	drupal_set_message(t('Taxonomy bundle %bundle has been deleted', array('%bundle' => $bundle['name'])));
 }
+
+function taxonomy_menu_sync_vocabulary_add_term_of_bundle($form, &$form_state, $vocabulary_machine_name, $bundle_machine_name){
+	module_load_include('inc', 'taxonomy_menu_sync');
+
+	$vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary_machine_name);
+	$bundles = variable_get('taxonomy_menu_sync_bundles_'.$vocabulary->machine_name, array());
+	$bundle = $bundles[$bundle_machine_name];
+	$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
+
+	// Form
+	$form = array();
+
+	$form['vocabulary'] = array(
+		'#type' => 'value',
+		'#value' => $vocabulary
+	);
+	$form['bundle'] = array(
+		'#type' => 'value',
+		'#value' => $bundle
+	);
+	$form['bundle_settings'] = array(
+		'#type' => 'value',
+		'#value' => $bundle_settings
+	);
+
+	// Item title
+	$form['name'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Name'),
+	);
+
+	$term = new stdClass;
+	$term->vocabulary_machine_name = $vocabulary->machine_name;
+
+	// Field API
+	_taxonomy_menu_sync_alter_term_form($term, $bundle_settings, $form, $form_state);
+
+	$form['actions'] = array(
+		'#type' => 'actions'
+	);
+	$form['actions']['submit'] = array(
+		'#type' => 'submit',
+		'#value' => t('Submit')
+	);
+
+	return $form;
+}
+
+function taxonomy_menu_sync_vocabulary_add_term_of_bundle_submit($form, &$form_state){
+	$values = $form_state['values'];
+
+	$vocabulary = $values['vocabulary'];
+
+	// Term fields
+	$term = new stdClass;
+	$term->name = $values['name'];
+	foreach($values as $field => $value){
+		if(strpos($field, 'field_') === 0){
+			$term->{$field} = $value;
+		}
+	}
+
+	$term->vid = $vocabulary->vid;
+	$term->vocabulary_machine_name = $vocabulary->machine_name;
+
+	$status = taxonomy_term_save($term);
+	switch ($status) {
+		case SAVED_NEW:
+			drupal_set_message(t('Created new term %term.', array('%term' => $term->name)));
+			watchdog('taxonomy', 'Created new term %term.', array('%term' => $term->name), WATCHDOG_NOTICE, l(t('edit'), 'taxonomy/term/' . $term->tid . '/edit'));
+			break;
+		case SAVED_UPDATED:
+			drupal_set_message(t('Updated term %term.', array('%term' => $term->name)));
+			watchdog('taxonomy', 'Updated term %term.', array('%term' => $term->name), WATCHDOG_NOTICE, l(t('edit'), 'taxonomy/term/' . $term->tid . '/edit'));
+			// Clear the page and block caches to avoid stale data.
+			cache_clear_all();
+			break;
+	}
+
+	$form_state['redirect'] = 'admin/structure/taxonomy/'.$vocabulary->machine_name;
+}
