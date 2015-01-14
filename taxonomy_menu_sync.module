@@ -476,7 +476,6 @@ function taxonomy_menu_sync_form_menu_edit_item_alter(&$form, &$form_state){
 		);
 
 		// Clean default options
-		$form['link_path']['#disabled'] = true;
 		$form['advanced']['expanded']['#access'] = false;
 		$form['advanced']['parent']['#access'] = false;
 		$form['advanced']['weight']['#access'] = false;
@@ -489,6 +488,9 @@ function taxonomy_menu_sync_form_menu_edit_item_alter(&$form, &$form_state){
 		// Taxonomy term
 		$term = taxonomy_term_sync_get_taxonomy_term($mlid);
 		if($term){
+			// Disable item path field
+			$form['link_path']['#disabled'] = true;
+
 			$bundle = taxonomy_menu_sync_get_term_bundle($term);
 			$bundle_settings = taxonomy_menu_sync_get_bundle_settings($bundle);
 
